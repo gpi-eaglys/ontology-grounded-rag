@@ -22,7 +22,7 @@ from neo4j import GraphDatabase
 LOG = logging.getLogger(__name__)
 
 SCRIPT_DIR   = os.path.dirname(os.path.realpath(__file__))
-PRJ_DIR      = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
+PRJ_DIR      = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 BLD_DIR      = os.path.join(PRJ_DIR, "build")
 SECTIONS_DIR = os.path.join(BLD_DIR, "extract", "hf-sections")
 
@@ -50,7 +50,8 @@ def ensure_vector_index(session) -> None:
 
 
 def embed_all(driver, oa: openai.OpenAI) -> None:
-    """Embed every Section node that does not yet have an embedding.
+    """
+    Embeds every Section node that does not yet have an embedding.
 
     Reads the corresponding .txt file from SECTIONS_DIR, calls the OpenAI
     embeddings API, and writes the vector back to Neo4j.
@@ -65,25 +66,29 @@ def embed_all(driver, oa: openai.OpenAI) -> None:
             " RETURN s.report_id AS report_id, s.slug AS slug"
         ).data()
 
-    LOG.info(f"Sections to embed: {len(rows)}")
+    n = len(rows)
+    LOG.info(f"Found {n} sections to embed")
 
+    ix_row = 0
     for row in rows:
         report_id = row["report_id"]
         slug      = row["slug"]
 
         pattern = os.path.join(SECTIONS_DIR, report_id, f"*_{slug}.txt")
         matches = sorted(glob.glob(pattern))
+        ix_row += 1
         if not matches:
-            LOG.warning(f"No text file found for {report_id}/{slug}, skipping")
+            LOG.warning(f"No text file found for ({ix_row}) {report_id}/{slug}, skipping")
             continue
 
         with open(matches[0], encoding="utf-8") as fh:
             text = fh.read().strip()
 
         if not text:
-            LOG.warning(f"Empty text for {report_id}/{slug}, skipping")
+            LOG.warning(f"Empty text for ({ix_row}) {report_id}/{slug}, skipping")
             continue
 
+        LOG.info(f"Embedding ({ix_row}) {report_id}_{slug}")
         vector = oa.embeddings.create(input=text, model=OPENAI_MODEL).data[0].embedding
 
         with driver.session() as session:
@@ -100,15 +105,14 @@ def embed_all(driver, oa: openai.OpenAI) -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d %(message)s", datefmt="%H:%M:%S")
+
+    assert os.path.isdir(SECTIONS_DIR), f"Cannot find root dir for sections: {SECTIONS_DIR}"
+
     from dotenv import load_dotenv
     load_dotenv()
-    
-    oa     = openai.OpenAI()  # reads OPENAI_API_KEY from env
+
+    oa     = openai.OpenAI()  # requires 'OPENAI_API_KEY' env var
     driver = GraphDatabase.driver(URI, auth=AUTH)
     try:
         embed_all(driver, oa)

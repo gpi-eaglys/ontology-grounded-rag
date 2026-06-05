@@ -10,9 +10,7 @@ SCRIPT_DIR = os.path.realpath(__file__)
 PRJ_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
 BLD_DIR = os.path.join(PRJ_DIR, "build")
 
-client = anthropic.Anthropic(
-    max_retries=5,
-    api_key="REDACTED_API_KEY")
+client = anthropic.Anthropic(max_retries=5)  # needs 'ANTHROPIC_API_KEY' in env
 
 SECTIONS: dict[str, str] = {
     "表題":     "pre",
