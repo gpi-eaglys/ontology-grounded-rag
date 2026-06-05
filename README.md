@@ -1,13 +1,15 @@
 # Ontology-Grounded RAG
 
-Ontology-Grounded Retrieval-Augmented Generation (_OG-RAG_) is an AI framework that grounds language model answers in an explicit semantic model. Instead of searching through unstructured documents, it uses a formal ontology (classes, attributes, and relationships) to retrieve exact facts and constraints, dramatically improving factual accuracy in complex workflows.
-
+Ontology-Grounded Retrieval-Augmented Generation (_OG-RAG_) is an AI framework that uses a formal ontology (classes, attributes, and relationships) to structure how content is indexed, retrieved, and used to generate answers. Unlike unstructured document search, the explicit semantic model ensures factual accuracy and consistency across complex workflows.
 
 ## Repo Contents
-* [Primer on ontologies](doc/ontologies/README.md)
-*  [Phase 01: Neo4j for Mandala](01-mandala/README.md)
-  * uses  Mandala as content
-  * develops a neo4j database on crawled/parsed data
-  * derives a ontology
-  * builds knowledge graph
+* [Primer on Ontologies](doc/ontologies/README.md)
+* [Phase 01: Neo4j + Mandala](01-mandala/README.md) : parses Shippai Mandala into knowledge graph
+
+
+・製造行
+　・失敗、事項　→  何が原因
+
+　・
+
 
