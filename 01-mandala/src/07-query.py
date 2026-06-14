@@ -37,7 +37,7 @@ AUTH = ("neo4j", "password")
 
 OPENAI_MODEL  = "text-embedding-3-small"
 CLAUDE_MODEL  = "claude-sonnet-4-6"
-DEFAULT_TOP_K = 5
+DEFAULT_TOP_K = 10
 
 SYSTEM_PROMPT = """\
 You are an expert analyst of Japanese industrial failure case reports (ハイトラブル事例).
@@ -147,6 +147,26 @@ def build_context_block(section: dict, text: str, graph: dict) -> str:
     return "\n".join(lines)
 
 
+def save_context(question: str, context_blocks: list[str], path: str) -> None:
+    """Write the full LLM prompt (system + user content) to a file for inspection.
+
+    @param question: user's natural-language question.
+    @param context_blocks: list of formatted section+graph context strings.
+    @param path: destination file path.
+    """
+    context = "\n\n---\n\n".join(context_blocks)
+    user_content = (
+        f"Context from failure case reports:\n\n{context}"
+        f"\n\n---\n\nQuestion: {question}"
+    )
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("=== SYSTEM ===\n\n")
+        fh.write(SYSTEM_PROMPT)
+        fh.write("\n\n=== USER ===\n\n")
+        fh.write(user_content)
+    LOG.info(f"Context saved to: {path}")
+
+
 def ask_claude(client: anthropic.Anthropic, question: str, context_blocks: list[str]) -> str:
     """Send the augmented context and question to Claude and return its answer.
 
@@ -176,7 +196,9 @@ def ask_claude(client: anthropic.Anthropic, question: str, context_blocks: list[
 @click.option("--top-k", default=DEFAULT_TOP_K, show_default=True,
               help="Number of sections to retrieve.")
 def main(question: str, top_k: int) -> None:
-    """Query the ontology-grounded RAG system with a natural-language QUESTION."""
+    """
+    Query the ontology-grounded RAG system with a natural-language QUESTION.
+    """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -208,6 +230,9 @@ def main(question: str, top_k: int) -> None:
                     f"  entities={len(graph['entities'])}"
                     f"  triples={len(graph['triples'])}"
                 )
+
+        context_path = os.path.join(BLD_DIR, "last_context.txt")
+        save_context(question, context_blocks, context_path)
 
         LOG.info("Asking Claude...")
         answer = ask_claude(claude, question, context_blocks)
