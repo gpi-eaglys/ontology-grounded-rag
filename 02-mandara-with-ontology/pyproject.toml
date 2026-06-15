@@ -1,0 +1,22 @@
+[project]
+name = "mandara-with-ontology"
+version = "0.1.0"
+description = "Ontology-grounded graph RAG over Japanese failure case reports — Phase 2 (with Mandala ontology)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Gabor Pinter", email = "g_pinter@eaglys.co.jp" },
+]
+
+dependencies = [
+    "anthropic>=0.28",
+    "beautifulsoup4>=4.12",
+    "click>=8.1",
+    "neo4j>=5.20",
+    "requests>=2.32",
+    "openai>=1.0",
+    "python-dotenv>=1.2.2",
+]
+
+[tool.uv]
+dev-dependencies = []

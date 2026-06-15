@@ -1,4 +1,5 @@
-"""Extract Level-1 and Level-2 taxonomy terms from the Failure Mandala (mandara.html).
+"""
+Extracts Level-1 and Level-2 taxonomy terms from the Failure Mandala (mandara.html).
 
 Outputs a JSON file with the three Mandala dimensions:
   - 原因 (Cause)  → CauseType
@@ -32,7 +33,8 @@ DIMENSIONS: list[tuple[str, str, str, str, str]] = [
 
 
 def extract_items(anchor: Tag, stop_anchor_name: str) -> list[dict]:
-    """Extract Level-1 and Level-2 items from a Mandala dimension section.
+    """
+    Extract Level-1 and Level-2 items from a Mandala dimension section.
 
     Iterates over siblings of *anchor* until *stop_anchor_name* is reached.
     Each top-level ``<ul>/<li>`` yields a Level-1 term; nested ``<ul>/<li>``

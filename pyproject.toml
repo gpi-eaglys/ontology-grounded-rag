@@ -1,0 +1,5 @@
+[tool.uv.workspace]
+members = [
+    "01-mandara-rag",
+    "02-mandara-with-ontology",
+]
