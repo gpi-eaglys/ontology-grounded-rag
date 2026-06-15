@@ -41,19 +41,21 @@ build/mandala/crawl/
   * with a 1 inserted in the ID prefix \ (e.g. CA0* → CA1*)
 * core structure:
     ```
-    cf   CA1*.html      — case files
-    mf   CA1*.jpg.gif   — images referenced in case files
-    sf   SA1*.html      — summary files   
+    cf   CA1*.html       — case files
+    mf   CA1*.{jpg,gif}  — images referenced in case files
+    sf   SA1*.html       — summary files   
+    ```
 
+    ```
     inf  .html     — landing page    
-    lis  .html     — 'l': lists, categorized lists of cases, referencing `cf/`
+    lis  .html     — 'l': categorized lists of cases, ref to `cf/` pages
     hf   .pdf     HA*  — 'hf': hazard files: detailed case analysis PDFs
     ```
 
 * 
 
 
-## Case: *216 - Titanic sinking
+## Case 216: Titanic
 * related files (Enlgsh files omitted)
 ```
 ./cf/CA0000216.html   Case file

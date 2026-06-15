@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LTC故障 原因ツリー分析</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue","Hiragino Sans",sans-serif;font-size:14px;color:#1a1a1a;background:#f7f7f5;padding:24px;line-height:1.6}
+h1{font-size:20px;font-weight:600;margin-bottom:4px}
+.subtitle{font-size:13px;color:#666;margin-bottom:20px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;font-size:12px;color:#555}
+.legend-item{display:flex;align-items:center;gap:5px}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.card{background:#fff;border-radius:12px;border:1px solid #e5e5e0;padding:20px 24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.node{margin:0 0 2px}
+.node-header{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-radius:8px;cursor:pointer;transition:background .15s;user-select:none}
+.node-header:hover{background:#f0efe8}
+.node.expanded>.node-header{background:#f0efe8}
+.toggle{width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#999;transition:transform .2s;margin-top:2px}
+.node.expanded>.node-header>.toggle{transform:rotate(90deg)}
+.node-body{padding:0 0 0 18px;margin-left:18px;border-left:1.5px solid #ddd;display:none}
+.node.expanded>.node-body{display:block}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;margin-left:6px;vertical-align:middle;white-space:nowrap}
+.tag-confirmed{background:#ddf5ec;color:#0a6847}
+.tag-hypothesis{background:#fef3d7;color:#7a5a0a}
+.tag-rejected{background:#fde8e8;color:#8b1a1a;text-decoration:line-through}
+.tag-gap{background:#fde8dc;color:#8b3a14}
+.tag-org{background:#eae8fd;color:#3d2f8a}
+.label{font-weight:600;line-height:1.5;flex:1;font-size:14px}
+.meta{font-size:12px;color:#555;line-height:1.6;margin:6px 0 8px 44px;background:#fafaf7;padding:10px 14px;border-radius:8px;border:1px solid #eee}
+.meta-row{margin:3px 0;display:flex;gap:6px}
+.meta-key{color:#888;min-width:80px;flex-shrink:0;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:0.3px}
+.meta-val{flex:1}
+.gap-box{margin:6px 0 10px 44px;padding:10px 14px;border-radius:8px;border-left:3px solid #d85a30;font-size:12px;line-height:1.6;color:#555;background:#fff8f5}
+.gap-box strong{color:#993c1d;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.3px}
+.gap-item{margin:4px 0 0 0;padding-left:12px;position:relative}
+.gap-item::before{content:"⚠";position:absolute;left:0;font-size:10px}
+.section-divider{height:1px;background:#e5e5e0;margin:16px 0}
+.summary-card{background:#fff;border-radius:12px;border:1px solid #e5e5e0;padding:20px 24px;margin-top:24px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.summary-card h2{font-size:16px;font-weight:600;margin-bottom:12px;color:#993c1d}
+.summary-list{list-style:none;padding:0}
+.summary-list li{padding:8px 0;border-bottom:1px solid #f0f0eb;font-size:13px;display:flex;gap:8px}
+.summary-list li:last-child{border-bottom:none}
+.priority-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0}
+.priority-high{background:#fde8e8;color:#8b1a1a}
+.priority-mid{background:#fef3d7;color:#7a5a0a}
+.priority-low{background:#eae8fd;color:#3d2f8a}
+</style>
+</head>
+<body>
+
+<h1>27kV ガス変圧器 LTC 2台焼損 — 原因ツリー分析</h1>
+<p class="subtitle">各ノードをクリックすると展開/折りたたみできます。判断条件・軸・閾値・情報不足ポイントを含みます。</p>
+
+<div class="legend">
+<div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>確認済み</div>
+<div class="legend-item"><div class="legend-dot" style="background:#BA7517"></div>仮説</div>
+<div class="legend-item"><div class="legend-dot" style="background:#8b1a1a"></div>棄却済み</div>
+<div class="legend-item"><div class="legend-dot" style="background:#d85a30"></div>情報不足</div>
+<div class="legend-item"><div class="legend-dot" style="background:#534AB7"></div>組織的要因</div>
+</div>
+
+<div class="card">
+<div id="tree-root"></div>
+</div>
+
+<div class="summary-card">
+<h2>情報不足ポイント一覧（優先度順）</h2>
+<ul class="summary-list" id="gap-summary"></ul>
+</div>
+
+<script>
+const data = {
+id:"top",label:"事象: 27kV ガス変圧器 LTC 2台焼損 → 地下変電所全停電（5/11）",tag:"confirmed",
+meta:[
+["発生日","5/11（土日）"],
+["影響","地下変電所全停電、外部発電機24h体制で2-3ヶ月給電"],
+["設備","27kV級ガス変圧器 LTC（負荷時タップ切替器）×2台、タップ1-19番"]
+],
+children:[
+
+{id:"a",label:"A. なぜ1台目が焼損したか（直接原因の追究）",tag:"confirmed",
+meta:[
+["観察事実","内部黒焦げ。常用タップ接点(2-18番付近)が軒並み焼損。端部(接点1・接点10付近)はきれい"],
+["判断軸","焼損パターンの分布が通電頻度と相関するか"],
+["閾値","常用域のみ焼損 → 通電頻度依存の劣化メカニズムが主因"]
+],
+children:[
+{id:"a1",label:"A-1. 絶縁破壊 → アーク放電 → 焼損",tag:"confirmed",
+meta:[
+["証拠","黒焦げ、すすが下部に堆積、アーク痕。「すすが下に落ちるから」「下にアークが落ちるから」"],
+["判断軸","放電エネルギーの痕跡の有無"],
+["メカニズム","絶縁耐力を超過 → アーク放電 → 内部焼損"]
+],
+children:[
+{id:"a1h1",label:"[棄却] 仮説H1: ボルト脱落（初期仮説）",tag:"rejected",
+meta:[
+["初期根拠","日立製遮断器でボルト脱落が多発。設計基準自体がおかしい（日立固有の問題）"],
+["棄却の判断軸","未操作機でも同事象が発生するか"],
+["棄却の閾値","2台目は「動かすな」指示で未操作 → にもかかわらず故障"],
+["棄却理由","ボルト脱落は機械的操作に伴うストレスで発生。未操作でも壊れた事実と矛盾"],
+["補足","ボルト脱落は「有名な失敗モード」として教科書化 → 初心者が吸い寄せられやすい"]
+]},
+{id:"a1h2",label:"[低確率] 仮説H2: ゴミ混入による絶縁破壊",tag:"hypothesis",
+meta:[
+["判断軸","内部異物の有無（開放点検時）"],
+["閾値","密封構造のガス変圧器 → 外部異物混入は構造的に考えにくい"],
+["現状","明確な異物の報告なし。ただし劣化粉塵は別途確認"]
+],
+gaps:["開放時の内部異物検査の詳細記録","SF₆ガスの純度分析結果"]},
+{id:"a1h3",label:"[低確率] 仮説H3: 雷・サージによる絶縁破壊",tag:"hypothesis",
+meta:[
+["判断軸","サージ記録・雷撃記録との時間的相関"],
+["閾値","①発生頻度が極めて低い ②2台同時（近接時期）の説明が困難"],
+["メモの表現","「でもそんなことは滅多におこらない」"]
+],
+gaps:["当該期間の系統サージ記録","避雷器動作記録","落雷データとの照合"]},
+
+{id:"a1main",label:"A-1-1. 接触抵抗増大 → 発熱 → 絶縁劣化の正帰還ループ（本命）",tag:"confirmed",
+meta:[
+["メカニズム","接触抵抗↑ → I²R発熱↑ → グリス劣化加速 → 粉塵蓄積 → 絶縁性能↓ → 更に抵抗↑（正帰還）→ 最終的に絶縁破壊"],
+["判断軸","常用タップのみ焼損するパターンとの整合性"],
+["閾値","V=IR: 負荷側電圧低下時にLTCが電流を増やして補償 → 高抵抗接点にさらに大電流 → 発熱加速"],
+["補足①","遮断器では同事象が起きない理由: 接点材料が異なる（無酸素銅等）、電流密度が異なる"],
+["補足②","「電流は一緒でも、電流密度は違う」「接点の材料が遮断機で違う」"]
+],
+children:[
+{id:"a111",label:"A-1-1-1. グリスの経年劣化（20-30年）",tag:"confirmed",
+meta:[
+["判断軸","グリス寿命と実使用年数の比較"],
+["閾値","20-30年で導電性グリスの機能が喪失レベルに劣化"],
+["決定的事実","他電力ではグリス塗り替えを定期実施 → 当該設備は未実施"],
+["構造的理由","タップとXXXが一体構造 → グリス交換が困難（または保全メニューに未反映）"]
+],
+children:[
+{id:"a111a",label:"劣化機構①: 加水分解",tag:"hypothesis",
+meta:[
+["判断軸","グリス内の水分含有量"],
+["閾値","水分侵入量がグリス基油の分解開始濃度を超えたか"],
+["推論","SF₆ガス密封構造でも微量の水分侵入は長期間で蓄積しうる"]
+],
+gaps:["グリスの水分分析結果（カールフィッシャー法等）","SF₆ガス中の水分含有量推移データ","密封部シール材の劣化点検記録"]},
+{id:"a111b",label:"劣化機構②: 熱劣化",tag:"hypothesis",
+meta:[
+["判断軸","接点温度の経年推移"],
+["閾値","グリス基油の熱分解温度（通常150-200℃）を超える局所加熱の有無"],
+["推論","接触抵抗微増 → 局所的に温度上昇 → グリスが先に劣化 → さらに抵抗上昇のループ"]
+],
+gaps:["運転中の接点温度データ（赤外線測定等）が存在するか","負荷電流の経年推移記録","タップ位置ごとの通電時間積算データ"]},
+{id:"a111c",label:"劣化機構③: 酸化",tag:"confirmed",
+meta:[
+["証拠","「グリス表面がとけているから、グリス内に酸素が供給されている」"],
+["判断軸","グリス表面状態の目視観察"],
+["閾値","表面溶融 → 内部への酸素供給経路が成立 → 酸化進行"],
+["メカニズム","グリス劣化 → 表面溶融 → 酸素侵入 → 酸化加速 → 粉状残渣発生"]
+],
+gaps:["酸化進行度の定量分析（酸価測定等）","酸化がどの段階から加速したかの推定"]},
+{id:"a111d",label:"劣化結果: 粉塵（残渣）蓄積",tag:"confirmed",
+meta:[
+["メカニズム","グリス劣化 → 粉状残渣発生 → 接点間に蓄積 → 絶縁距離の実効的短縮"],
+["判断軸","内部清掃時の粉塵量と分布"],
+["メモの表現","「グリスが劣化をしてくると、粉が」"]
+],
+gaps:["粉塵の成分分析結果（金属酸化物？炭化グリス？）","蓄積量の定量データ","蓄積箇所と焼損箇所の相関"]}
+]},
+{id:"a112",label:"A-1-1-2. 硫化銀の生成",tag:"hypothesis",
+meta:[
+["判断軸","接点材質が銀系か否か"],
+["閾値","銀接点 + 硫化雰囲気 → Ag₂S生成で接触抵抗増大"],
+["メモの記載","「硫化銀」「すずメッキ」への言及あり → 接点材質に関する議論が存在"]
+],
+gaps:["接点の材質仕様の確認（銀？銅？すずメッキ？）","硫化銀生成の有無・程度の分析結果","硫化ガスの発生源（グリス劣化物？外部？）"]},
+{id:"a113",label:"A-1-1-3. すずメッキの劣化",tag:"hypothesis",
+meta:[
+["判断軸","すずメッキ仕様の有無とその残存状態"],
+["閾値","メッキ層消耗 → 母材露出 → 酸化 → 接触抵抗増大"],
+["メモの記載","「すずメッキ」への言及あり"]
+],
+gaps:["メッキ仕様の有無確認","メッキ層の残存厚測定","ウィスカー（すず結晶成長）の有無"]}
+]}
+]}
+]},
+
+{id:"b",label:"B. なぜ2台目も故障したか（連鎖メカニズム）",tag:"confirmed",
+meta:[
+["時系列","1台目故障 → 「動かすな」指示 → にもかかわらず2台目も焼損（5/11）"],
+["判断軸","2台の劣化状態の相関性 + 負荷移行の影響"],
+["核心","未操作でも壊れた = 劣化はすでに臨界点に近かった"]
+],
+children:[
+{id:"b1",label:"B-1. 同一設計・同一経年による潜在劣化の並行進行",tag:"confirmed",
+meta:[
+["判断軸","製造者・型式・製造年・運用条件の同一性"],
+["閾値","同一条件 → 同程度の劣化進行を想定すべき"],
+["推論","1台が壊れた時点で、2台目も同程度の劣化状態にあった"]
+],
+gaps:["2台それぞれの製造年・製造ロットの確認","個体差データ（タップ操作回数、負荷パターンの違い）","過去の個別点検記録の比較"]},
+{id:"b2",label:"B-2. 1台目脱落後の負荷集中による劣化加速",tag:"confirmed",
+meta:[
+["メカニズム","1台運転 → 電流約2倍 → I²R発熱は約4倍 → 既に限界に近い接点の劣化が一気に臨界超過"],
+["判断軸","負荷分担比率の変化と接点温度への影響"],
+["閾値","通常50%負荷→100%負荷で接点温度が急上昇するか"]
+],
+gaps:["1台目脱落〜2台目故障までの正確な経過時間","2台目の実負荷電流値","接点温度の推定計算（I²Rモデル）"]},
+{id:"b3",label:"B-3. V=IR電圧補償動作による追加ストレス",tag:"hypothesis",
+meta:[
+["メカニズム","需要家側の電圧低下 → LTCが電流増で電圧補償 → 高抵抗接点にさらに大電流"],
+["判断軸","電圧補償動作（タップ変更）の有無と頻度"],
+["閾値","補償動作が接点発熱を臨界点以上に加速するか"],
+["メモの表現","「V=IR… 顧客側のVがさがったら、電流を強くして電圧をあげよう」"]
+],
+gaps:["1台目故障後のLTC動作ログ（タップ切替回数）","電圧・電流の実測データ","保護リレーの動作設定値"]}
+]},
+
+{id:"c",label:"C. なぜ30年間検知できなかったか（潜在劣化の見逃し構造）",tag:"confirmed",
+meta:[
+["判断軸","既存の保全手法で接触抵抗の漸増を捕捉できたか"],
+["結論","既存手法では原理的に検知不可能だった"]
+],
+children:[
+{id:"c1",label:"C-1. 目視点検の物理的限界",tag:"confirmed",
+meta:[
+["判断軸","目視で接触抵抗のmΩオーダーの変化を検知できるか"],
+["閾値","不可能。接触抵抗の初期変化は外観に現れない"],
+["補足","「蓋あけた → ピンとこない」「工場もっていった → ピンとこない」"]
+]},
+{id:"c2",label:"C-2. 計測型予防保全が未導入",tag:"confirmed",
+meta:[
+["判断軸","以下の診断手法が導入されていたか"],
+["未導入項目","①部分放電測定 ②温度トレンド監視 ③オンライン接触抵抗監視 ④油/ガス分析"],
+["閾値","いずれも未導入 → 潜在劣化の定量的検出手段がゼロ"],
+["構造的理由","事故が起きていない → 計測投資が通りにくい"]
+],
+gaps:["当時の保全計画書の具体的内容","計測型保全が導入されなかった経緯（コスト？技術？認識？）"]},
+{id:"c3",label:"C-3. 設備構造上グリス交換が困難（または計画未反映）",tag:"confirmed",
+meta:[
+["判断軸","タップとXXXの一体構造がグリス交換を物理的に阻害するか"],
+["閾値","他電力ではグリス塗り替えを定期実施 → 当該設備は未実施"],
+["核心的問い","一体構造で「不可能」だったのか、「計画に入っていなかった」だけか"]
+],
+gaps:["「タップ一体構造」の具体的な設計図面・仕様","他電力のグリス交換頻度と具体手順","一体構造の設備でグリス交換した実績の有無"]},
+{id:"c4",label:"C-4. 他電力の保全知見が未共有",tag:"org",
+meta:[
+["判断軸","他電力でのグリス定期交換の知見が社内保全計画に反映されていたか"],
+["閾値","反映なし → 業界横断的な知見共有の欠如"],
+["メモの表現","「じゃあ、なんで他電力はおきないの」「他電力ではグリス塗り替えを定期的にやっていた」"]
+],
+gaps:["他電力との技術交流の記録","グリス交換に関する業界技術報告・学会発表の有無","ガストランス特有の保全基準の比較"]}
+]},
+
+{id:"d",label:"D. 組織的・構造的要因（再発防止の根幹）",tag:"org",
+meta:[
+["判断軸","技術的真因だけでなく、なぜ組織として30年間対応できなかったか"],
+["位置づけ","直接原因A-Cの背後にある「仕組みの問題」"]
+],
+children:[
+{id:"d1",label:"D-1. メーカー報告をそのまま採用する構造",tag:"org",
+meta:[
+["判断軸","メーカー報告に対する自社独自の検証プロセスの有無"],
+["閾値","「メーカーの報告をそのままグループ長に提案してしまう。それで通ってしまう」"],
+["問題","原因究明の深度が外部依存 → 自社内での学習・知見蓄積が進まない"],
+["GCB104との対比","GCB104では原因究明に2年を要した ← 独自に検証したケース"]
+]},
+{id:"d2",label:"D-2. 復旧優先で原因究明が後回し",tag:"org",
+meta:[
+["判断軸","復旧完了後に原因究明が組織的に実施されたか"],
+["閾値","「どう電源復旧しようか、という方向性になる。原因究明には目がむかない」"],
+["構造","地下変電所停電→24h発電機運転→復旧が最優先→原因究明のリソース不足"],
+["矛盾","「2-3ヶ月後、電源が来た後、原因を現地でみましょう」→ 実際には見たが判断できない"]
+]},
+{id:"d3",label:"D-3. 若手の観察視野の狭さ（症状同定で停止）",tag:"org",
+meta:[
+["判断軸","開放調査時に因果の遡行ができるか"],
+["閾値","「あけたら悪いところだけをみにいく」「知識がないから、若手だから経験がない」"],
+["構造","症状のラベル貼り（黒焦げ＝焼損）で安心 → 因果の広がりを切り捨て"],
+["対比","ベテランは「黒焦げ → なぜ加熱 → 電流密度 → 接触抵抗 → グリス → 経年」と遡行する"]
+]},
+{id:"d4",label:"D-4. 地下変電所全停電が「想定外」",tag:"org",
+meta:[
+["判断軸","全停電シナリオに対する事前の備え・訓練の有無"],
+["閾値","「地下変電所が停電するなんて想定していなかった」"],
+["矛盾","「想定しているから、現地発電機」→ 部分的には想定していた"],
+["問題","想定レベルが曖昧 → リスクアセスメントの深度不足"]
+],
+gaps:["リスクアセスメント記録の有無","全停電シナリオの訓練実績","発電機準備の根拠文書"]},
+{id:"d5",label:"D-5. メーカー・機器固有の故障傾向知識が未体系化",tag:"org",
+meta:[
+["判断軸","「どのメーカーのどの機器がどう壊れやすいか」が組織知として蓄積されているか"],
+["閾値","個人の暗黙知に偏在 → 形式知として共有されていない"],
+["メモの表現","「どのメーカーのどの機器が、どういう不具合をおこしやすいのか？の背景知識 →」"],
+["補足","製造年との相関も重要だが体系化されていない"]
+]},
+{id:"d6",label:"D-6. 部品供給の脆弱性",tag:"org",
+meta:[
+["判断軸","修理・交換に必要な部品が入手可能か"],
+["閾値","「あれ日立つくってないぞ。どうしよう」→ 製造終了部品の存在"],
+["対応","「撤去中の阿部変電所から部品をぱくる手配をしていた」→ 流用対応"],
+["問題","計画的な部品管理・代替品確保の仕組みが未整備"]
+],
+gaps:["部品供給状況の体系的な管理記録","抵抗体等の重要部品の在庫・代替品情報"]}
+]}
+]};
+
+const allGaps = [];
+
+function collectGaps(n, path="") {
+  const p = path ? path + " > " + n.label.replace(/\[.*?\]\s*/,"") : n.label;
+  if(n.gaps) {
+    n.gaps.forEach(g => allGaps.push({gap:g, path:p, id:n.id}));
+  }
+  if(n.children) n.children.forEach(c => collectGaps(c, p));
+}
+collectGaps(data);
+
+function renderNode(n, depth){
+  const div = document.createElement('div');
+  div.className = 'node' + (depth < 2 ? ' expanded' : '');
+
+  const hdr = document.createElement('div');
+  hdr.className = 'node-header';
+
+  const hasContent = (n.children && n.children.length > 0) || n.meta || n.gaps;
+
+  const tog = document.createElement('span');
+  tog.className = 'toggle';
+  tog.textContent = hasContent ? '▶' : '·';
+  hdr.appendChild(tog);
+
+  const lbl = document.createElement('span');
+  lbl.className = 'label';
+  let labelHtml = n.label;
+  if(n.tag){
+    const tagLabels = {confirmed:'確認済',hypothesis:'仮説',rejected:'棄却',org:'組織的'};
+    labelHtml += ' <span class="tag tag-'+n.tag+'">'+(tagLabels[n.tag]||n.tag)+'</span>';
+  }
+  lbl.innerHTML = labelHtml;
+  hdr.appendChild(lbl);
+  div.appendChild(hdr);
+
+  const body = document.createElement('div');
+  body.className = 'node-body';
+
+  if(n.meta && n.meta.length > 0){
+    const m = document.createElement('div');
+    m.className = 'meta';
+    n.meta.forEach(([k,v]) => {
+      const r = document.createElement('div');
+      r.className = 'meta-row';
+      r.innerHTML = '<span class="meta-key">'+k+'</span><span class="meta-val">'+v+'</span>';
+      m.appendChild(r);
+    });
+    body.appendChild(m);
+  }
+
+  if(n.gaps && n.gaps.length > 0){
+    const g = document.createElement('div');
+    g.className = 'gap-box';
+    let html = '<strong>⚠ 情報不足ポイント</strong>';
+    n.gaps.forEach(x => {
+      html += '<div class="gap-item">' + x + '</div>';
+    });
+    g.innerHTML = html;
+    body.appendChild(g);
+  }
+
+  if(n.children){
+    n.children.forEach(c => {
+      body.appendChild(renderNode(c, depth+1));
+    });
+  }
+
+  div.appendChild(body);
+
+  hdr.addEventListener('click', () => {
+    if(hasContent) div.classList.toggle('expanded');
+  });
+
+  return div;
+}
+
+document.getElementById('tree-root').appendChild(renderNode(data, 0));
+
+// Render gap summary
+const priorities = [
+  {ids:["a111a","a111b","a112","a113"], label:"最重要", cls:"priority-high", reason:"真因の確定に直結"},
+  {ids:["b2","b3","a111c"], label:"重要", cls:"priority-mid", reason:"連鎖メカニズムの定量裏付け"},
+  {ids:["c3","c4","c2"], label:"構造的", cls:"priority-mid", reason:"再発防止策の方向性決定"},
+  {ids:["b1","d4","d6","a1h2","a1h3"], label:"補足的", cls:"priority-low", reason:"仮説検証・組織要因"}
+];
+
+const summaryEl = document.getElementById('gap-summary');
+priorities.forEach(p => {
+  const relevant = allGaps.filter(g => p.ids.includes(g.id));
+  relevant.forEach(g => {
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="priority-badge '+p.cls+'">'+p.label+'</span><span>'+g.gap+'</span>';
+    summaryEl.appendChild(li);
+  });
+});
+</script>
+</body>
+</html>

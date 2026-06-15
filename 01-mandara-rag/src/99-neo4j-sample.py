@@ -14,7 +14,7 @@ URI  = "bolt://localhost:7687"
 AUTH = ("neo4j", "password")
 
 TRIPLES = [
-    ("valve",        "failed_due_to",     "metal_fatigue"),
+    ("valve",        "failed_due_to",      "metal_fatigue"),
     ("metal_fatigue","caused_by",          "high_pressure"),
     ("operator",     "ignored",            "warning_signal"),
     ("warning_signal","indicates",         "high_pressure"),

@@ -3,7 +3,7 @@
 
 | Language | Description |
 |----------|-------------|
-| **OWL** | Most expressive, based on description logics. The de facto standard for rich ontologies |
+| **OWL** | `Web Ontology Language`:  de facto standard for rich ontologies; based on description logics|
 | **RDFS** | Basic class/property hierarchies only, no logical constraints |
 | **SKOS** | Designed for thesauri, taxonomies, and controlled vocabularies |
 | **SHACL** | Defines validation rules over RDF data |

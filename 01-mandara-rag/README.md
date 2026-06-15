@@ -9,12 +9,38 @@
 | Phase 2     | graph RAG with ontology         |
 
 
+## Data Overview
+
+* crawl data from Mandala is placed under: [build/mandala/crawl](../build/mandala/crawl)
+* [site overview](../doc/site-overview.md)
+
+
+### Report Sections 
+* most report have these sections
+* numbering may differ 
+* not every report has every section 
+
+| Japanese | Slug | Description |
+|----------|------|-------------|
+| 事象 | jisho | What happened — factual description of the incident |
+| 経過 | keika | Timeline/progression of events leading up to and during the incident |
+| 原因 | genin | Root cause analysis |
+| 対処 | taisho | Immediate response actions taken at the time |
+| 対策 | taisaku | Corrective and preventive measures implemented afterward |
+| 総括 | sokatsu | Overall summary and conclusions |
+| 知識化 | chishikika | Lessons learned and distilled knowledge for future prevention |
+| 背景 | haikei | Background context and circumstances surrounding the incident |
+| 四方山話 | yomoyama | Side notes and informal observations (yomoyamabanashi) |
+| 後日談 | gojitsudan | Follow-up / postscript — what happened after the case closed |
+
+
+## Research Plan
 
 ### Phase 1: Graph-only RAG 
 
 1. Data 
    * Parse HA*.pdf 
-   * split into the six fixed sections per case
+   * split into the fixed sections per case
 2. Entities + Relations
    * Extract entities + relations from each section 
    * use LLM (Japanese-capable, e.g. Claude) → output structured triples
