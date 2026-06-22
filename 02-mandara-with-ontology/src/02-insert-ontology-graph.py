@@ -27,8 +27,9 @@ PRJ_DIR       = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 BLD_DIR       = os.path.join(PRJ_DIR, "build")
 TAXONOMY_PATH = os.path.join(BLD_DIR, "mandala", "mandala_taxonomy.json")
 
-URI  = "bolt://localhost:7687"
-AUTH = ("neo4j", "password")
+URI      = "bolt://localhost:7687"
+AUTH     = ("neo4j", "password")
+DATABASE = "mandara02"
 
 # Maps dimension key → Neo4j node label
 LABELS: dict[str, str] = {
@@ -93,7 +94,7 @@ def load_taxonomy(driver) -> None:
     with open(TAXONOMY_PATH, encoding="utf-8") as f:
         taxonomy = json.load(f)
 
-    with driver.session() as session:
+    with driver.session(database=DATABASE) as session:
         for dimension_key, dim_data in taxonomy.items():
             label = LABELS[dimension_key]
             items = dim_data["items"]

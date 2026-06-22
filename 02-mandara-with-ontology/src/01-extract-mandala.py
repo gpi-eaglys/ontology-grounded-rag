@@ -1,10 +1,13 @@
 """
 Extracts Level-1 and Level-2 taxonomy terms from the Failure Mandala (mandara.html).
-
-Outputs a JSON file with the three Mandala dimensions:
-  - 原因 (Cause)  → CauseType
-  - 行動 (Action) → ActionType
-  - 結果 (Result) → ResultType
+Input: 
+  - mandara.html
+Output: 
+  - JSON file: "build/mandala/mandala_taxonomy.json"
+  - structure: hree Mandala dimensions:
+    - 原因 (Cause)  → CauseType
+    - 行動 (Action) → ActionType
+    - 結果 (Result) → ResultType
 """
 
 import json

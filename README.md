@@ -23,6 +23,12 @@ ANTHROPIC_API_KEY="sk-ant-api03-IXUnt..."
   * [text](01-mandala/src/07-query.py)
 
 
+## TODO
+
+- **Neo4j license**: currently using `neo4j:enterprise` with `NEO4J_ACCEPT_LICENSE_AGREEMENT=eval` (30-day limit).
+  Long-term free alternative: run two Community containers on separate ports (7687/7688) — one per experiment,
+  no `database=` parameter needed, just different `URI` constants per experiment.
+
 ## Repo Contents
 * [Primer on Ontologies](doc/ontologies/README.md)
 * [Phase 01: Neo4j + Mandala](01-mandala/README.md) : parses Shippai Mandala into knowledge graph

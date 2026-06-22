@@ -1,15 +1,18 @@
 """
-Load extracted entities and relations into Neo4j.
+Load extracted entities and relations into Neo4j (mandara02).
+
+Reads the same hf-relations build output produced by experiment 01 and
+inserts it into the ``mandara02`` database, which also holds the Mandala
+ontology layer.
 
 Graph model:
     (FailureCase)-[:HAS_SECTION]->(Section)-[:MENTIONS]->(Entity)
     (Entity {type})-[:RELATION_TYPE]->(Entity)
 
-Requirements: Neo4j running locally on bolt://localhost:7687
-    docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:latest
+Requirements: Neo4j running locally on bolt://localhost:7687 with mandara02 created.
 
 Usage:
-    uv run python src/05-insert-graph.py
+    uv run python src/03-insert-graph.py
 """
 import glob
 import json
@@ -22,29 +25,22 @@ from common import SECTIONS_INV
 
 LOG = logging.getLogger(__name__)
 
-SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
-PRJ_DIR    = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
-BLD_DIR    = os.path.join(PRJ_DIR, "build")
+SCRIPT_DIR    = os.path.dirname(os.path.realpath(__file__))
+PRJ_DIR       = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+BLD_DIR       = os.path.join(PRJ_DIR, "build")
 RELATIONS_DIR = os.path.join(BLD_DIR, "extract", "hf-relations")
-SECTIONS_DIR = os.path.join(BLD_DIR, "extract", "hf-sections")
 
 URI      = "bolt://localhost:7687"
 AUTH     = ("neo4j", "password")
-DATABASE = "mandara01"
+DATABASE = "mandara02"
 
 
 def insert_section(session, report_id: str, sec_slug: str, ent_rel_json: dict) -> None:
-    """
-    Inserts one section's entities and relations into Neo4j.
-
-    Creates or merges a FailureCase node, a Section node linked to it,
-    Entity nodes for each extracted entity, MENTIONS edges from the Section
-    to each Entity, and typed relation edges between Entity pairs.
+    """Insert one section's entities and relations into Neo4j.
 
     @param session: active Neo4j driver session.
     @param report_id: identifier of the failure case report (e.g. ``'HA0000601'``).
-    @param sec_slug: ASCII slug of the section (e.g. ``'genin'``), used to look up
-        the kanji label via SECTIONS_INV.
+    @param sec_slug: ASCII slug of the section (e.g. ``'genin'``).
     @param ent_rel_json: parsed JSON dict with ``'entities'`` and ``'relations'`` lists.
     """
     sec_label = SECTIONS_INV.get(sec_slug, sec_slug)
@@ -98,12 +94,9 @@ def load_all(driver) -> None:
     n_inserted = 0
     with driver.session(database=DATABASE) as session:
         for fpath in json_files:
-            # if not "HA0000265/05_taisaku" in fpath:
-            #     continue
-
             report_id = os.path.basename(os.path.dirname(fpath))
-            fname     = os.path.splitext(os.path.basename(fpath))[0]  # e.g. "03_genin"
-            sec_slug  = fname.split("_", 1)[-1]                        # e.g. "genin"
+            fname     = os.path.splitext(os.path.basename(fpath))[0]
+            sec_slug  = fname.split("_", 1)[-1]
 
             with open(fpath, encoding="utf-8") as fh:
                 ent_rel_json = json.load(fh)

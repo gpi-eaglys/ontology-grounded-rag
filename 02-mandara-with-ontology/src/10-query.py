@@ -1,17 +1,18 @@
 """
-Ontology-grounded RAG query over Japanese failure case reports.
+Ontology-grounded RAG query over Japanese failure case reports (mandara02).
 
 Embeds the user question, retrieves the most similar Section nodes via
-Neo4j vector search, augments each with graph-traversal context (entities
-and relations), then asks Claude for a grounded answer.
+Neo4j vector search, augments each with graph-traversal context (entities,
+relations, and matching Mandala ontology categories), then asks Claude for
+a grounded answer.
 
 Requirements:
     OPENAI_API_KEY and ANTHROPIC_API_KEY env vars (or .env file)
-    Neo4j running on bolt://localhost:7687 with embeddings loaded
+    Neo4j running on bolt://localhost:7687 with mandara02 populated
 
 Usage:
-    uv run python src/07-query.py "What caused the radiation leak on the Mutsu?"
-    uv run python src/07-query.py --top-k 8 "放射能漏れの原因は何ですか？"
+    uv run python src/05-query.py "What caused the radiation leak on the Mutsu?"
+    uv run python src/05-query.py --top-k 8 "放射能漏れの原因は何ですか？"
 """
 import glob
 import logging
@@ -34,7 +35,7 @@ SECTIONS_DIR = os.path.join(BLD_DIR, "extract", "hf-sections")
 
 URI      = "bolt://localhost:7687"
 AUTH     = ("neo4j", "password")
-DATABASE = "mandara01"
+DATABASE = "mandara02"
 
 OPENAI_MODEL  = "text-embedding-3-small"
 CLAUDE_MODEL  = "claude-sonnet-4-6"
@@ -43,7 +44,8 @@ DEFAULT_TOP_K = 10
 SYSTEM_PROMPT = """\
 You are an expert analyst of Japanese industrial failure case reports (ハイトラブル事例).
 You are given retrieved sections from multiple reports, each augmented with a knowledge
-graph of entities and relations extracted from that section.
+graph of entities and relations extracted from that section, as well as matching categories
+from the Mandala failure taxonomy (cause types, action types, result types).
 
 Answer the user's question using ONLY the provided context.
 If the answer cannot be found in the context, say so clearly.
@@ -94,13 +96,18 @@ def fetch_section_text(report_id: str, slug: str) -> str:
 
 
 def fetch_graph_context(session, report_id: str, slug: str) -> dict:
-    """Retrieve entities and relations for a section via graph traversal.
+    """Retrieve entities, relations, and ontology categories for a section.
+
+    Traverses the graph to find:
+    - Entity nodes mentioned in the section
+    - Typed relations between those entities
+    - Matching Mandala ontology categories (CauseType / ActionType / ResultType)
+      whose names appear in the section's entity names
 
     @param session: active Neo4j driver session.
     @param report_id: failure case identifier.
     @param slug: section ASCII slug.
-    @return: dict with ``'entities'`` (list of {name, type}) and
-        ``'triples'`` (list of {source, rel, target}).
+    @return: dict with ``'entities'``, ``'triples'``, and ``'ontology'`` lists.
     """
     entities = session.run(
         "MATCH (s:Section {report_id: $report_id, slug: $slug})-[:MENTIONS]->(e:Entity)"
@@ -117,11 +124,22 @@ def fetch_graph_context(session, report_id: str, slug: str) -> dict:
         slug=slug,
     ).data()
 
-    return {"entities": entities, "triples": triples}
+    # Look up ontology categories whose names match any entity in this section
+    ontology = session.run(
+        "MATCH (s:Section {report_id: $report_id, slug: $slug})-[:MENTIONS]->(e:Entity)"
+        " MATCH (cat) WHERE (cat:CauseType OR cat:ActionType OR cat:ResultType)"
+        "   AND cat.name = e.name"
+        " RETURN labels(cat)[0] AS category_type, cat.name AS name,"
+        "        cat.level AS level, cat.dimension AS dimension",
+        report_id=report_id,
+        slug=slug,
+    ).data()
+
+    return {"entities": entities, "triples": triples, "ontology": ontology}
 
 
 def build_context_block(section: dict, text: str, graph: dict) -> str:
-    """Format a section's text and graph context into a single prompt block.
+    """Format a section's text, graph context, and ontology matches into a prompt block.
 
     @param section: dict with report_id, slug, label, score.
     @param text: plain-text content of the section.
@@ -145,11 +163,16 @@ def build_context_block(section: dict, text: str, graph: dict) -> str:
         for t in graph["triples"]:
             lines.append(f"  {t['source']} --[{t['rel']}]--> {t['target']}")
 
+    if graph["ontology"]:
+        lines += ["", "### Mandala Ontology Matches"]
+        for o in graph["ontology"]:
+            lines.append(f"  - [{o['category_type']} L{o['level']}] {o['name']} (dimension: {o['dimension']})")
+
     return "\n".join(lines)
 
 
 def save_context(question: str, context_blocks: list[str], path: str) -> None:
-    """Write the full LLM prompt (system + user content) to a file for inspection.
+    """Write the full LLM prompt to a file for inspection.
 
     @param question: user's natural-language question.
     @param context_blocks: list of formatted section+graph context strings.
@@ -173,7 +196,7 @@ def ask_claude(client: anthropic.Anthropic, question: str, context_blocks: list[
 
     @param client: Anthropic client.
     @param question: user's natural-language question.
-    @param context_blocks: list of formatted section+graph context strings.
+    @param context_blocks: list of formatted section+graph+ontology context strings.
     @return: Claude's answer as plain text.
     """
     context = "\n\n---\n\n".join(context_blocks)
@@ -197,9 +220,7 @@ def ask_claude(client: anthropic.Anthropic, question: str, context_blocks: list[
 @click.option("--top-k", default=DEFAULT_TOP_K, show_default=True,
               help="Number of sections to retrieve.")
 def main(question: str, top_k: int) -> None:
-    """
-    Query the ontology-grounded RAG system with a natural-language QUESTION.
-    """
+    """Query the ontology-grounded RAG system (mandara02) with a natural-language QUESTION."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -230,9 +251,10 @@ def main(question: str, top_k: int) -> None:
                     f"  score={sec['score']:.3f}"
                     f"  entities={len(graph['entities'])}"
                     f"  triples={len(graph['triples'])}"
+                    f"  ontology_matches={len(graph['ontology'])}"
                 )
 
-        context_path = os.path.join(BLD_DIR, "last_context.txt")
+        context_path = os.path.join(BLD_DIR, "last_context_02.txt")
         save_context(question, context_blocks, context_path)
 
         LOG.info("Asking Claude...")
