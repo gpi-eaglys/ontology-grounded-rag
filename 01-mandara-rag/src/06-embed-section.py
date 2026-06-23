@@ -11,7 +11,7 @@ DB rebuilds never call OpenAI for a section that was already embedded.
 
 Requirements:
     OPENAI_API_KEY env var set
-    Neo4j running on bolt://localhost:7687
+    Neo4j running on bolt://localhost:7601
 
 Usage:
     uv run python src/06-embed-section.py
@@ -32,7 +32,7 @@ BLD_DIR         = os.path.join(PRJ_DIR, "build")
 SECTIONS_DIR    = os.path.join(BLD_DIR, "extract", "hf-sections")
 EMBEDDINGS_DIR  = os.path.join(BLD_DIR, "extract", "hf-embeddings")
 
-URI      = "bolt://localhost:7687"
+URI      = "bolt://localhost:7601"
 AUTH     = ("neo4j", "password")
 DATABASE = "mandara01"
 

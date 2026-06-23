@@ -13,7 +13,7 @@ Non-substantive sections (bibliography, title) are always skipped.
 
 Requirements:
     ANTHROPIC_API_KEY env var (or .env file)
-    Neo4j running on bolt://localhost:7687 with mandara02 populated.
+    Neo4j running on bolt://localhost:7602 with mandara02 populated.
     Run 01-04 pipeline scripts first.
 
 Usage:
@@ -24,6 +24,7 @@ import glob
 import json
 import logging
 import os
+import re
 
 import anthropic
 import click
@@ -38,9 +39,10 @@ SCRIPT_DIR    = os.path.dirname(os.path.realpath(__file__))
 PRJ_DIR       = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 BLD_DIR       = os.path.join(PRJ_DIR, "build")
 SECTIONS_DIR  = os.path.join(BLD_DIR, "extract", "hf-sections")
+ONTOLOGY_DIR  = os.path.join(BLD_DIR, "extract", "hf-ontology")
 TAXONOMY_PATH = os.path.join(BLD_DIR, "mandala", "mandala_taxonomy.json")
 
-URI      = "bolt://localhost:7687"
+URI      = "bolt://localhost:7602"
 AUTH     = ("neo4j", "password")
 DATABASE = "mandara02"
 
@@ -187,6 +189,32 @@ def classify_section_text(
     )
 
 
+def load_cached_annotation(report_id: str, slug: str) -> dict | None:
+    """Load a previously persisted ontology annotation from disk.
+
+    Parses lines of the form ``[CauseType L2] 設計不良 (cause)`` written by
+    ``06-export-ontology-annotations.py`` and returns a classification dict
+    compatible with ``classify_section_text``.
+
+    @param report_id: failure case identifier (e.g. ``'HA0000615'``).
+    @param slug: section ASCII slug (e.g. ``'genin'``).
+    @return: dict with keys ``cause_terms``, ``action_terms``, ``result_terms``,
+        or ``None`` if no cache file exists.
+    """
+    path = os.path.join(ONTOLOGY_DIR, report_id, f"{slug}.txt")
+    if not os.path.isfile(path):
+        return None
+    pattern = re.compile(r"^\[(?:CauseType|ActionType|ResultType) L\d+\] (.+) \((cause|action|result)\)$")
+    result: dict[str, list[str]] = {"cause_terms": [], "action_terms": [], "result_terms": []}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            m = pattern.match(line.strip())
+            if m:
+                name, dimension = m.group(1), m.group(2)
+                result[f"{dimension}_terms"].append(name)
+    return result
+
+
 def read_section_text(report_id: str, slug: str) -> str:
     """Read the plain-text content of a section from disk.
 
@@ -321,17 +349,25 @@ def main(force: bool) -> None:
                     n_skipped += 1
                     continue
 
-                classification = classify_section_text(client, tool, report_id, slug, text)
+                cached = load_cached_annotation(report_id, slug)
+                if cached is not None:
+                    classification = cached
+                    source = "disk"
+                else:
+                    classification = classify_section_text(client, tool, report_id, slug, text)
+                    source = "claude"
+
                 edges = write_classified_as_edges(session, report_id, slug, classification)
                 n_edges      += edges
                 n_classified += 1
 
                 LOG.info(
-                    "  [%d/%d] %s/%s → cause=%s  action=%s  result=%s  (%d edges)",
+                    "  [%d/%d] %s/%s [%s] → cause=%s  action=%s  result=%s  (%d edges)",
                     n_classified + n_skipped,
                     len(sections),
                     report_id,
                     slug,
+                    source,
                     classification["cause_terms"],
                     classification["action_terms"],
                     classification["result_terms"],

@@ -1,7 +1,7 @@
 """
 Minimal Neo4j sample — creates a small synthetic graph and queries it.
 
-Requirements: Neo4j running locally on bolt://localhost:7687
+Requirements: Neo4j running locally on bolt://localhost:7601
     docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:latest
 
 Usage:
@@ -10,7 +10,7 @@ Usage:
 
 from neo4j import GraphDatabase
 
-URI  = "bolt://localhost:7687"
+URI  = "bolt://localhost:7601"
 AUTH = ("neo4j", "password")
 
 TRIPLES = [

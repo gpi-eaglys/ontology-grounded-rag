@@ -7,7 +7,7 @@ and relations), then asks Claude for a grounded answer.
 
 Requirements:
     OPENAI_API_KEY and ANTHROPIC_API_KEY env vars (or .env file)
-    Neo4j running on bolt://localhost:7687 with embeddings loaded
+    Neo4j running on bolt://localhost:7601 with embeddings loaded
 
 Usage:
     uv run python src/07-query.py "What caused the radiation leak on the Mutsu?"
@@ -32,7 +32,7 @@ PRJ_DIR      = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 BLD_DIR      = os.path.join(PRJ_DIR, "build")
 SECTIONS_DIR = os.path.join(BLD_DIR, "extract", "hf-sections")
 
-URI      = "bolt://localhost:7687"
+URI      = "bolt://localhost:7601"
 AUTH     = ("neo4j", "password")
 DATABASE = "mandara01"
 

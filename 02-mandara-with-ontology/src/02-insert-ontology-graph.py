@@ -7,7 +7,7 @@ Graph model:
 
 Nodes are MERGE-d (idempotent — safe to re-run).
 
-Requirements: Neo4j running on bolt://localhost:7687
+Requirements: Neo4j running on bolt://localhost:7602
     docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:latest
 
 Usage:
@@ -27,7 +27,7 @@ PRJ_DIR       = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 BLD_DIR       = os.path.join(PRJ_DIR, "build")
 TAXONOMY_PATH = os.path.join(BLD_DIR, "mandala", "mandala_taxonomy.json")
 
-URI      = "bolt://localhost:7687"
+URI      = "bolt://localhost:7602"
 AUTH     = ("neo4j", "password")
 DATABASE = "mandara02"
 

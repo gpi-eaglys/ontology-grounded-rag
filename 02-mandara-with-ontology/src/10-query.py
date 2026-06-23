@@ -3,16 +3,23 @@ Ontology-grounded RAG query over Japanese failure case reports (mandara02).
 
 Embeds the user question, retrieves the most similar Section nodes via
 Neo4j vector search, augments each with graph-traversal context (entities,
-relations, and matching Mandala ontology categories), then asks Claude for
+relations, and matching Mandala ontology categories), then asks an LLM for
 a grounded answer.
 
+Supported LLM providers:
+    anthropic  (default) — requires ANTHROPIC_API_KEY
+    lmstudio             — uses a local LM Studio server (no API key needed)
+
 Requirements:
-    OPENAI_API_KEY and ANTHROPIC_API_KEY env vars (or .env file)
-    Neo4j running on bolt://localhost:7687 with mandara02 populated
+    OPENAI_API_KEY env var (or .env file) for embeddings
+    ANTHROPIC_API_KEY env var when using --provider anthropic
+    Neo4j running on bolt://localhost:7602 with mandara02 populated
 
 Usage:
-    uv run python src/05-query.py "What caused the radiation leak on the Mutsu?"
-    uv run python src/05-query.py --top-k 8 "放射能漏れの原因は何ですか？"
+    uv run python src/10-query.py "What caused the radiation leak on the Mutsu?"
+    uv run python src/10-query.py --provider lmstudio "放射能漏れの原因は何ですか？"
+    uv run python src/10-query.py --provider lmstudio --local-model gemma-3-12b-it "..."
+    uv run python src/10-query.py --top-k 8 "放射能漏れの原因は何ですか？"
 """
 import glob
 import logging
@@ -33,13 +40,17 @@ PRJ_DIR      = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 BLD_DIR      = os.path.join(PRJ_DIR, "build")
 SECTIONS_DIR = os.path.join(BLD_DIR, "extract", "hf-sections")
 
-URI      = "bolt://localhost:7687"
+URI      = "bolt://localhost:7602"
 AUTH     = ("neo4j", "password")
 DATABASE = "mandara02"
 
-OPENAI_MODEL  = "text-embedding-3-small"
-CLAUDE_MODEL  = "claude-sonnet-4-6"
-DEFAULT_TOP_K = 10
+OPENAI_MODEL        = "text-embedding-3-small"
+CLAUDE_MODEL        = "claude-sonnet-4-6"
+# LM Studio CLI: lms server start && lms load google/gemma-4-12b
+# Verify with:   curl http://localhost:1234/v1/models
+LM_STUDIO_URL           = "http://localhost:1234/v1"
+LM_STUDIO_DEFAULT_MODEL = "google/gemma-4-12b"
+DEFAULT_TOP_K       = 10
 
 SYSTEM_PROMPT = """\
 You are an expert analyst of Japanese industrial failure case reports (ハイトラブル事例).
@@ -101,8 +112,8 @@ def fetch_graph_context(session, report_id: str, slug: str) -> dict:
     Traverses the graph to find:
     - Entity nodes mentioned in the section
     - Typed relations between those entities
-    - Matching Mandala ontology categories (CauseType / ActionType / ResultType)
-      whose names appear in the section's entity names
+    - Mandala ontology categories (CauseType / ActionType / ResultType) directly
+      linked to the section via CLASSIFIED_AS edges
 
     @param session: active Neo4j driver session.
     @param report_id: failure case identifier.
@@ -124,11 +135,8 @@ def fetch_graph_context(session, report_id: str, slug: str) -> dict:
         slug=slug,
     ).data()
 
-    # Look up ontology categories whose names match any entity in this section
     ontology = session.run(
-        "MATCH (s:Section {report_id: $report_id, slug: $slug})-[:MENTIONS]->(e:Entity)"
-        " MATCH (cat) WHERE (cat:CauseType OR cat:ActionType OR cat:ResultType)"
-        "   AND cat.name = e.name"
+        "MATCH (s:Section {report_id: $report_id, slug: $slug})-[:CLASSIFIED_AS]->(cat)"
         " RETURN labels(cat)[0] AS category_type, cat.name AS name,"
         "        cat.level AS level, cat.dimension AS dimension",
         report_id=report_id,
@@ -215,11 +223,45 @@ def ask_claude(client: anthropic.Anthropic, question: str, context_blocks: list[
     return response.content[0].text
 
 
+def ask_local(model: str, question: str, context_blocks: list[str]) -> str:
+    """Send the augmented context and question to a local LM Studio server.
+
+    Uses the OpenAI-compatible API exposed by LM Studio at localhost:1234.
+    No API key is required.
+
+    @param model: model identifier as shown in LM Studio (e.g. ``'gemma-3-12b-it'``).
+    @param question: user's natural-language question.
+    @param context_blocks: list of formatted section+graph+ontology context strings.
+    @return: the model's answer as plain text.
+    """
+    client = openai.OpenAI(base_url=LM_STUDIO_URL, api_key="lm-studio")
+    context = "\n\n---\n\n".join(context_blocks)
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"Context from failure case reports:\n\n{context}"
+                    f"\n\n---\n\nQuestion: {question}"
+                ),
+            },
+        ],
+    )
+    return response.choices[0].message.content
+
+
 @click.command()
 @click.argument("question")
 @click.option("--top-k", default=DEFAULT_TOP_K, show_default=True,
               help="Number of sections to retrieve.")
-def main(question: str, top_k: int) -> None:
+@click.option("--provider", default="anthropic", show_default=True,
+              type=click.Choice(["anthropic", "lmstudio"], case_sensitive=False),
+              help="LLM provider for answering. 'lmstudio' requires no API key.")
+@click.option("--local-model", default=LM_STUDIO_DEFAULT_MODEL, show_default=True,
+              help="Model name to use when --provider lmstudio.")
+def main(question: str, top_k: int, provider: str, local_model: str) -> None:
     """Query the ontology-grounded RAG system (mandara02) with a natural-language QUESTION."""
     logging.basicConfig(
         level=logging.INFO,
@@ -229,7 +271,7 @@ def main(question: str, top_k: int) -> None:
     load_dotenv()
 
     oa     = openai.OpenAI()
-    claude = anthropic.Anthropic()
+    claude = anthropic.Anthropic() if provider == "anthropic" else None
     driver = GraphDatabase.driver(URI, auth=AUTH)
 
     try:
@@ -257,8 +299,12 @@ def main(question: str, top_k: int) -> None:
         context_path = os.path.join(BLD_DIR, "last_context_02.txt")
         save_context(question, context_blocks, context_path)
 
-        LOG.info("Asking Claude...")
-        answer = ask_claude(claude, question, context_blocks)
+        if provider == "lmstudio":
+            LOG.info(f"Asking LM Studio ({local_model})...")
+            answer = ask_local(local_model, question, context_blocks)
+        else:
+            LOG.info("Asking Claude...")
+            answer = ask_claude(claude, question, context_blocks)
 
         print(f"\nQ: {question}\n")
         print(f"A: {answer}\n")

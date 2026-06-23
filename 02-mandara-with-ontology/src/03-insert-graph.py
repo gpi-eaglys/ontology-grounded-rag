@@ -9,7 +9,7 @@ Graph model:
     (FailureCase)-[:HAS_SECTION]->(Section)-[:MENTIONS]->(Entity)
     (Entity {type})-[:RELATION_TYPE]->(Entity)
 
-Requirements: Neo4j running locally on bolt://localhost:7687 with mandara02 created.
+Requirements: Neo4j running locally on bolt://localhost:7602 with mandara02 created.
 
 Usage:
     uv run python src/03-insert-graph.py
@@ -30,7 +30,7 @@ PRJ_DIR       = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 BLD_DIR       = os.path.join(PRJ_DIR, "build")
 RELATIONS_DIR = os.path.join(BLD_DIR, "extract", "hf-relations")
 
-URI      = "bolt://localhost:7687"
+URI      = "bolt://localhost:7602"
 AUTH     = ("neo4j", "password")
 DATABASE = "mandara02"
 

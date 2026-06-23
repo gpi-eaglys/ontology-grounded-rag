@@ -1,0 +1,43 @@
+services:
+
+  neo4j-exp01:
+    image: neo4j:community
+    container_name: neo4j-exp01
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_server_bolt_advertised__address: localhost:7601
+      NEO4J_server_http_advertised__address: localhost:7401
+    ports:
+      - "7401:7474"   # HTTP browser
+      - "7601:7687"   # Bolt
+    volumes:
+      - ./build/neo4j-db/exp01/data:/data
+    restart: unless-stopped
+
+  neo4j-exp02:
+    image: neo4j:community
+    container_name: neo4j-exp02
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_server_bolt_advertised__address: localhost:7602
+      NEO4J_server_http_advertised__address: localhost:7402
+    ports:
+      - "7402:7474"   # HTTP browser
+      - "7602:7687"   # Bolt
+    volumes:
+      - ./build/neo4j-db/exp02/data:/data
+    restart: unless-stopped
+
+  neo4j-exp03:
+    image: neo4j:community
+    container_name: neo4j-exp03
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_server_bolt_advertised__address: localhost:7603
+      NEO4J_server_http_advertised__address: localhost:7403
+    ports:
+      - "7403:7474"   # HTTP browser
+      - "7603:7687"   # Bolt
+    volumes:
+      - ./build/neo4j-db/exp03/data:/data
+    restart: unless-stopped

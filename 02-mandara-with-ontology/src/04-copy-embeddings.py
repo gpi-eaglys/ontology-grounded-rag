@@ -7,7 +7,7 @@ Section nodes in ``mandara02``.  No OpenAI calls are made.
 
 A vector index is created in mandara02 if it does not already exist.
 
-Requirements: Neo4j running on bolt://localhost:7687 with mandara02 populated.
+Requirements: Neo4j running on bolt://localhost:7602 with mandara02 populated.
     Run 03-insert-graph.py before this script.
     Run 01's 06-embed-section.py at least once so the .npy cache exists.
 
@@ -28,7 +28,7 @@ PRJ_DIR        = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 BLD_DIR        = os.path.join(PRJ_DIR, "build")
 EMBEDDINGS_DIR = os.path.join(BLD_DIR, "extract", "hf-embeddings")
 
-URI      = "bolt://localhost:7687"
+URI      = "bolt://localhost:7602"
 AUTH     = ("neo4j", "password")
 DATABASE = "mandara02"
 

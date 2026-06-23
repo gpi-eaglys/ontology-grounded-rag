@@ -10,7 +10,7 @@ any taxonomy nodes its entities resolve to.
 
 Requirements:
     OPENAI_API_KEY and ANTHROPIC_API_KEY env vars (or .env file)
-    Neo4j running on bolt://localhost:7687 with mandara02 populated.
+    Neo4j running on bolt://localhost:7602 with mandara02 populated.
     Run 01-04 pipeline scripts first.
 
 Usage:
@@ -38,7 +38,7 @@ BLD_DIR       = os.path.join(PRJ_DIR, "build")
 SECTIONS_DIR  = os.path.join(BLD_DIR, "extract", "hf-sections")
 TAXONOMY_PATH = os.path.join(BLD_DIR, "mandala", "mandala_taxonomy.json")
 
-URI      = "bolt://localhost:7687"
+URI      = "bolt://localhost:7602"
 AUTH     = ("neo4j", "password")
 DATABASE = "mandara02"
 
